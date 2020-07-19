@@ -48,7 +48,7 @@ class Pix2FoodModel(ABC):
         self.loss_G_GAN = self.criterionGAN(fakeLogits, True)
         self.loss_G_L1 = self.criterionL1(self.fakeImg, self.trueImg)
         self.loss_G = self.loss_G_GAN + self.loss_G_L1 * self.opt.lmd
-        self.loss_G.backward()
+        self.loss_G_L1.backward()
 
     def backward_D(self):
         # --- D trueImg loss --- #

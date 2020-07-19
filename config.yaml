@@ -7,4 +7,4 @@ training:
     batch_size: 4
     NOISE_DIM: 1200
     num_epochs: 200
-    show_every: 300
+    show_every: 1000

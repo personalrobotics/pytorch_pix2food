@@ -3,26 +3,15 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
 # %matplotlib inline
-plt.rcParams['figure.figsize'] = (10.0, 8.0)  # set default size of plots
+plt.rcParams['figure.figsize'] = (15.0, 8.0)  # set default size of plots
 plt.rcParams['image.interpolation'] = 'nearest'
 plt.rcParams['image.cmap'] = 'gray'
 
 
 def show_images(images):
-    sqrtn = int(np.ceil(np.sqrt(images.shape[0])))
-    plt.figure(figsize=(4, 4))
-    gs = gridspec.GridSpec(sqrtn, sqrtn)
-    gs.update(wspace=0.05, hspace=0.05)
-
-    for i, img in enumerate(images):
-        ax = plt.subplot(gs[i])
-        plt.axis('off')
-        ax.set_xticklabels([])
-        ax.set_yticklabels([])
-        ax.set_aspect('equal')
-        plt.imshow(img)
-    plt.savefig("img.png")
-    # plt.show()
+    for i in range(len(images)):
+        plt.imshow(images[i], interpolation='nearest')
+    plt.show()
     return
 
 
@@ -38,7 +27,7 @@ def show_all_images(imgs_list):
         for col, img in enumerate(imgs):
             ax = fig2.add_subplot(spec2[row, col])
             ax.axis('off')
-            plt.imshow(img)
+            plt.imshow(img, interpolation='nearest')
     # plt.savefig("img.png")
     plt.show()
     return
