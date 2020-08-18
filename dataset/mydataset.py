@@ -11,8 +11,8 @@ from torch.utils.data import DataLoader
 
 from .utils import timeit
 # self.tranform = T.Compose([T.ToTensor(),
-#                                    T.Resize(size=self.img_size),
-#                                    T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
+#                            T.Resize(size=self.img_size),
+#                            T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
 
 
 def getTrainAndVal(dataset, NUM_TRAIN, batch_size):
@@ -29,7 +29,8 @@ def getTrainAndVal(dataset, NUM_TRAIN, batch_size):
 class OriginDataset(Dataset):
 
     def __init__(self, data_root, img_size, transform=None):
-        self.down_size = (30, 40)  # (40, 30)
+        self.down_size = (40, 30)  # (40, 30)
+
         self.data_root = data_root
         self.img_size = img_size
         self.images_path = os.path.join(self.data_root, "images")
@@ -43,24 +44,50 @@ class OriginDataset(Dataset):
         return len(self.imagesName)
 
     def __getitem__(self, index):
+        INTENSITY = 1
         # open the image file and get angle data from the filename
         bbox = self.getBBox(self.imagesName[index].split(".")[0])
         cv2Img = cv2.imread(os.path.join(self.images_path, self.imagesName[index]))
-        # --- pixImg --- #
-        pixImg = self.generatePixImg(cv2Img, bbox)
+        # --- kMeans --- #
+        kmPixImg = self.kmeans(cv2.cvtColor(cv2Img, cv2.COLOR_BGR2RGB), bbox)
+        kmPixImg = cv2.cvtColor(kmPixImg, cv2.COLOR_RGB2GRAY)
+        kmPixImg = cv2.resize(kmPixImg, self.down_size)
+        kmPixImg = np.where(kmPixImg > 0, INTENSITY, 0)
         # --- trueImg --- #
         trueImg = Image.open(os.path.join(self.images_path, self.imagesName[index]))
         # --- bboxImg --- #
         bboxImg = np.array(self.getImgWithBBox(trueImg, bbox))
-        # --- histImg --- #
-        # hist = self.getHistImg(cv2Img, bbox)
-        # --- kMeans --- #
-        kmPixImg = self.kmeans(cv2.cvtColor(cv2Img, cv2.COLOR_BGR2RGB), bbox)
         # resize and transform the image
         trueImg = trueImg.resize(self.img_size)
         if self.tranform:
             trueImg = self.tranform(trueImg)
-        return pixImg, trueImg, bboxImg, kmPixImg
+        return kmPixImg, trueImg, bboxImg
+
+    def getBBox(self, imgName):
+        tree = ET.parse(os.path.join(self.annotations_path, imgName + ".xml"))
+        root = tree.getroot()
+        bbox = None
+        for node in root:
+            if node.tag == 'object':
+                # obj_name = node.find('name').text
+                # print(obj_name)
+                if node.find('bndbox') is None:
+                    continue
+                xmin = int(node.find('bndbox').find('xmin').text)
+                ymin = int(node.find('bndbox').find('ymin').text)
+                xmax = int(node.find('bndbox').find('xmax').text)
+                ymax = int(node.find('bndbox').find('ymax').text)
+                bbox = [xmin, ymin, xmax, ymax]
+        return bbox
+
+    def getImgWithBBox(self, im, bbox):
+        """
+            im (PIL.Image)
+        """
+        im = im.copy()
+        draw = ImageDraw.Draw(im)
+        draw.rectangle(bbox, width=4)
+        return im
 
     # @timeit
     def kmeans(self, img, bbox):
@@ -88,112 +115,76 @@ class OriginDataset(Dataset):
         kmPixImg[ymin:ymax, xmin:xmax] = res
         return kmPixImg
 
-    def getHistImg(self, img, bbox):
-        xmin, ymin, xmax, ymax = bbox
-        hsv = cv2.cvtColor(img[ymin:ymax, xmin:xmax], cv2.COLOR_BGR2HSV)
-        hist = cv2.calcHist([hsv], [0, 1], None, [180, 256], [0, 180, 0, 256])
-        # cv2.normalize(hist, hist, 0, 255, cv2.NORM_MINMAX)
-        return hist
 
-    def getImgWithBBox(self, im, bbox):
-        """
-            im (PIL.Image)
-            bbox (tuple or list)
-        """
-        # bbox = [50, 50, 70, 70]
-        # print(bbox)
-        im = im.copy()
-        draw = ImageDraw.Draw(im)
-        draw.rectangle(bbox, width=4)
-        return im
+class UNetDataset(OriginDataset):
 
-    def getBBox(self, imgName):
-        tree = ET.parse(os.path.join(self.annotations_path, imgName + ".xml"))
-        root = tree.getroot()
-        bbox = None
-        for node in root:
-            if node.tag == 'object':
-                obj_name = node.find('name').text
-                # print(obj_name)
-                if node.find('bndbox') is None:
-                    continue
-                xmin = int(node.find('bndbox').find('xmin').text)
-                ymin = int(node.find('bndbox').find('ymin').text)
-                xmax = int(node.find('bndbox').find('xmax').text)
-                ymax = int(node.find('bndbox').find('ymax').text)
-                bbox = [xmin, ymin, xmax, ymax]
-        return bbox
-
-    def generatePixImg(self, img, bbox):
-        img = self.crop(img, bbox)
-        img = self.binarize(img)
-        return img
-
-    def crop(self, img, bbox):
-        xmin, ymin, xmax, ymax = bbox
-        # x, y = xmin, ymin
-        # w, h = ymax - ymin, xmax - xmin
-        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        # bai_bb = np.copy(img)
-        bai_clean = np.copy(img)
-
-        # cv2.rectangle(bai_bb, (x, y), (x+h, y+w), (255, 255, 255), 2)
-
-        mask = np.zeros_like(img)
-        mask[ymin:ymax, xmin:xmax] = 1.0
-        bai_clean = mask * img
-        return bai_clean
-
-    def binarize(self, img):
-        # Convert BGR to HSV
-        INTENSITY = 1
-
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        # hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-        # define range of yellow color in HSV
-        # lower_yellow = np.array([18, 20, 180])
-        # upper_yellow = np.array([32, 128, 255])
-        lower_yellow = np.array([15, 100, 100])
-        upper_yellow = np.array([35, 255, 255])
-        # Threshold the HSV image to get only blue colors
-        mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
-
-        res = cv2.bitwise_and(img, img, mask=mask)
-        # res = cv2.cvtColor(res, cv2.COLOR_BGR2RGB)
-
-        res = cv2.cvtColor(res, cv2.COLOR_BGR2GRAY)
-        res = np.where(res > 0, INTENSITY, 0)
-        return res
-
-
-class RFDataset(Dataset):
-    """[summary]
-
-    Args:
-        input_path (str): path to pix image
-        image_path (str): path to ground truth image
-    """
-    def __init__(self, input_path, image_path, img_size, noise_dim=1200, transform=T.ToTensor):
-        self.input_path = input_path
-        self.image_path = image_path
-        self.tranform = transform
-        self.img_size = img_size
-        self.input_paths = os.listdir(self.input_path)
-        # print(self.input_paths)
-
-    def __getitem__(self, index):
-        # # open the image file and get angle data from the filename
-        input_img = cv2.imread(os.path.join(self.input_path, self.input_paths[index]), 0)
-
-        image = Image.open(os.path.join(self.image_path, self.input_paths[index]))
-        image = image.resize((self.img_size[0], self.img_size[1]))
-
-        # transform the image
-        if self.tranform:
-            image = self.tranform(image)
-        return input_img, image
-        # return image
+    def __init__(self, data_root, img_size, transform=None, test=False):
+        OriginDataset.__init__(self, data_root, img_size, transform=transform)
+        self.forque_width = 45  # in pixel after down sample
+        self.origin_size = (640, 480)
+        self.start_path = os.path.join(self.data_root, "start")
+        self.end_path = os.path.join(self.data_root, "end")
+        if test:
+            self.start_path = os.path.join(self.data_root, "test_start")
+            self.end_path = os.path.join(self.data_root, "test_end")
+        self.startName = os.listdir(self.start_path)
 
     def __len__(self):
-        #return the total number of dataset
-        return len(self.input_paths)
+        return len(self.startName)
+
+    def __getitem__(self, index):
+        # open the image file and get angle data from the filename
+        imgID = self.startName[index].split(".")[0][:4]
+        # print(f"imgID = {imgID}")
+        startName = imgID + "_1_start.png"
+        endName = imgID + "_5_finish.png"
+        # --- prepare data --- #
+        startImg = Image.open(os.path.join(self.start_path, startName))
+        endImg = Image.open(os.path.join(self.end_path, endName))
+
+        actImg = cv2.imread(os.path.join(self.start_path, startName))
+        actImg = cv2.cvtColor(actImg, cv2.COLOR_BGR2RGB)
+        # actImg = self.getActionImgFromXML(endName, actImg=np.array(startImg))
+        actImg = self.getActionImgFromXML(endName, actImg=None)
+        actImg = Image.fromarray(actImg)
+        # resize and transform the image
+        startImg = startImg.resize(self.img_size)
+        endImg = endImg.resize(self.img_size)
+        actImg = actImg.resize(self.img_size)
+        if self.tranform:
+            startImg = self.tranform(startImg)
+            endImg = self.tranform(endImg)
+            actImg = self.tranform(actImg)
+        return startImg, actImg, endImg, imgID
+
+    def getActionImgFromXML(self, endName, actImg=None):
+        INTENSITY = 255
+        if actImg is None:
+            actImg = np.zeros((self.origin_size[1], self.origin_size[0]))
+        tree = ET.parse(os.path.join(self.annotations_path, endName.split(".")[0] + ".xml"))
+        root = tree.getroot()
+        bbox = None
+        ojbName = "left_push"
+        # print(endName)
+        for node in root:
+            if node.tag == 'object' and node.find("name").text == ojbName:
+                if node.find("bndbox") is None:
+                    continue
+                xmin = int(node.find("bndbox").find('xmin').text)
+                ymin = int(node.find("bndbox").find('ymin').text)
+                xmax = int(node.find("bndbox").find('xmax').text)
+                ymax = int(node.find("bndbox").find('ymax').text)
+                bbox = [xmin, ymin, xmax, ymax]
+        # --- assume it's left  push --- #
+        start = [xmax, (ymin + ymax) // 2]
+        end = [xmin, (ymin + ymax) // 2]
+        # TODO: cover cases where direction of push action are arbitrary.
+        # Here we only cover `left` direction.
+        distance_in_pixel = start[0] - end[0]
+        x, y = start
+        r = self.forque_width // 2
+        for i in range(distance_in_pixel):
+            actionValue = INTENSITY * i / distance_in_pixel
+            actImg[y - r: y + r, x - i] = actionValue
+        cv2.normalize(actImg, actImg, 0, 255, cv2.NORM_MINMAX)
+        return actImg

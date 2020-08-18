@@ -1,8 +1,14 @@
 # training parameters
 data_root: /home/nansong/Data/data_july
-img_size: [160, 120]
+img_size: [256, 256]
 NUM_TRAIN: 250
 batch_size: 4
 NOISE_DIM: 1200
 num_epochs: 200
 show_every: 300
+
+# networks parameters
+input_nc: 3
+output_nc: 3
+ngf: 3
+netG: "dc"
