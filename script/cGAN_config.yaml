@@ -1,0 +1,26 @@
+# training parameters
+isTrain: False
+training:
+    data_root: /home/nansong/Data/data_july
+    # img_size: [128, 128]
+    # img_size: [160, 120]
+    img_size: [512, 512]
+    # img_size: [320, 240]
+    # img_size: [640, 480]
+    NUM_TRAIN: 55
+    batch_size: 4
+    NOISE_DIM: 1200
+    num_epochs: 300
+    show_every: 500
+    save_every: 3000
+test:
+    test_path: /home/nansong/Data/data_july/test
+gen:
+    input_nc: 4
+    output_nc: 3
+    ngf: 64
+    netG: "resnet_6blocks"
+    netD: "resnet"
+    lmd: 5
+
+
