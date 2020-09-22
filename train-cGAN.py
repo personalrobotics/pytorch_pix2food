@@ -62,8 +62,10 @@ if __name__ == '__main__':
                     pickle.dump(pix2Food, modelFile)
                 modelFile.close()
                 print(f"save model to {modelPath} at iteration = {iteration}")
-        if epoch == trainConfig["training"]["num_epochs"] * 0.8:
-            pix2Food.setlmd(0)
+
+            if epoch >= trainConfig["training"]["num_epochs"] * 0.8:
+                lmd = trainConfig["gen"]["lmd"] * np.exp(-0.001 * iteration)
+                pix2Food.setlmd(lmd)
 
     with open(modelPath, 'wb') as modelFile:
         pickle.dump(pix2Food, modelFile)

@@ -5,11 +5,12 @@ from numpy.linalg import norm
 import xml.etree.ElementTree as ET
 
 from PIL import Image, ImageDraw
+import torch
 from torch.utils.data import Dataset, random_split
 import torchvision.transforms as T
 from torch.utils.data import DataLoader
 
-from .utils import timeit
+from .utils import timeit, kmeans
 # self.tranform = T.Compose([T.ToTensor(),
 #                            T.Resize(size=self.img_size),
 #                            T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
@@ -132,6 +133,20 @@ class UNetDataset(OriginDataset):
     def __len__(self):
         return len(self.startName)
 
+    def collate_fn(self, batch):
+        startImg = [x[0] for x in batch]
+        actImg = [x[1] for x in batch]
+        endImg = [x[2] for x in batch]
+        imgID = [x[3] for x in batch]
+        plateBBox = [x[4] for x in batch]
+
+        startImg = torch.stack(startImg)
+        actImg = torch.stack(actImg)
+        endImg = torch.stack(endImg)
+        # imgID = torch.stack(imgID)
+        # plateBBox = plateBBox
+        return startImg, actImg, endImg, imgID, plateBBox
+
     def __getitem__(self, index):
         # open the image file and get angle data from the filename
         imgID = self.startName[index].split(".")[0][:4]
@@ -145,7 +160,7 @@ class UNetDataset(OriginDataset):
         actImg = cv2.imread(os.path.join(self.start_path, startName))
         actImg = cv2.cvtColor(actImg, cv2.COLOR_BGR2RGB)
         # actImg = self.getActionImgFromXML(endName, actImg=np.array(startImg))
-        actImg = self.getActionImgFromXML(endName, actImg=None)
+        actImg = self.getActionImgFromXML(endName.split(".")[0], actImg=None)
         actImg = Image.fromarray(actImg)
         # resize and transform the image
         startImg = startImg.resize(self.img_size)
@@ -155,13 +170,32 @@ class UNetDataset(OriginDataset):
             startImg = self.tranform(startImg)
             endImg = self.tranform(endImg)
             actImg = self.tranform(actImg)
-        return startImg, actImg, endImg, imgID
+
+        plateBBox = self.getBBox(endName.split(".")[0], ojbName="plate")
+
+        return startImg, actImg, endImg, imgID, plateBBox
+
+    def getBBox(self, imgName, ojbName):
+        tree = ET.parse(os.path.join(self.annotations_path, imgName + ".xml"))
+        root = tree.getroot()
+        bbox = None
+        for node in root:
+            if node.tag == 'object' and node.find("name").text == ojbName:
+                if node.find('bndbox') is None:
+                    continue
+                xmin = int(node.find('bndbox').find('xmin').text)
+                ymin = int(node.find('bndbox').find('ymin').text)
+                xmax = int(node.find('bndbox').find('xmax').text)
+                ymax = int(node.find('bndbox').find('ymax').text)
+                bbox = [xmin, ymin, xmax, ymax]
+                bbox = (bbox)
+        return bbox
 
     def getActionImgFromXML(self, endName, actImg=None):
         INTENSITY = 255
         if actImg is None:
             actImg = np.zeros((self.origin_size[1], self.origin_size[0]))
-        tree = ET.parse(os.path.join(self.annotations_path, endName.split(".")[0] + ".xml"))
+        tree = ET.parse(os.path.join(self.annotations_path, endName + ".xml"))
         root = tree.getroot()
         bbox = None
         ojbName = "left_push"
