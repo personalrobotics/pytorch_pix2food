@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os
 import pickle
 import numpy as np
@@ -23,28 +25,11 @@ if __name__ == '__main__':
     # --- config --- #
     configPath = "cGAN_config.yaml"
     with open(configPath, 'rb') as file:
-        trainConfig = yaml.load(file, Loader=yaml.FullLoader)
-    # --- networks --- #
+        # trainConfig = yaml.load(file, Loader=yaml.FullLoader)
+        trainConfig = yaml.load(file)
+    print(trainConfig)
     pix2Food = Pix2FoodModel(opt, trainConfig)
-
-    # --- prepare dataset --- #
     img_size = trainConfig["training"]["img_size"]
-    NUM_TRAIN = trainConfig["training"]["NUM_TRAIN"]
-    NOISE_DIM = trainConfig["training"]["NOISE_DIM"]
-    batch_size = trainConfig["training"]["batch_size"]
-
-    food_dataset = UNetDataset(trainConfig["training"]["data_root"],
-                               trainConfig["training"]["img_size"],
-                               transform=T.ToTensor(),
-                               test=True)
-    print(len(food_dataset))
-    # loader_train, loader_val = getTrainAndVal(food_dataset, NUM_TRAIN, batch_size)
-    bs = 1
-    loadar_food = DataLoader(food_dataset, batch_size=bs, collate_fn=food_dataset.collate_fn)
-
-    # --- load model --- #
-    # modelName = "pix2food-patch512.pkl"
-    # modelPath = os.path.join("../checkpoints", modelName)
     pix2Food.netG.load_state_dict(torch.load("../checkpoints/netG-patch512.pkl"))
-    
+    print(pix2Food)
 

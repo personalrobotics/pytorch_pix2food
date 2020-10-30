@@ -2,6 +2,7 @@
 
 import rospy
 import numpy as np
+import yaml 
 
 from visualization_msgs.msg import MarkerArray
 from sensor_msgs.msg import CompressedImage, Image, CameraInfo
@@ -21,10 +22,10 @@ class RepubManager(object):
     def __init__(self, node_name='RepubManager'):
         self.node_name = node_name
         self.image_topic='/camera/color/image_raw/compressed'
+        # self.image_topic='/sim_camera/color/image_raw/compressed'
         self.spanet_in_topic = '/ReconfigManager/out/spanet'
         self.spanet_out_topic = '/ReconfigManager/in/spanet/marker_array'
         self.food_detector_topic = '/food_detector/marker_array'
-
         self.img_cnt = 0
         self.marker_array_cnt = 0
 
@@ -52,6 +53,9 @@ class RepubManager(object):
         # print('get img message from camera', img.data)
         self.img_cnt += 1
         print('{}. get img message from camera'.format(str(self.img_cnt)))
+        frame_id = img.header.frame_id
+        info_map = dict(frame_id=frame_id, push_direction="no_push", push_vec=[0,0,0])
+        img.header.frame_id = yaml.dump(info_map)
         self.spanet_pub.publish(img)
 
     def spanet_callback(self, marker_array):

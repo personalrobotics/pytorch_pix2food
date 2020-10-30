@@ -58,7 +58,9 @@ def show_all_images_rotate(imgs_list, ratio=(3, 4)):
             ax = fig2.add_subplot(spec2[row, col])
             ax.axis('off')
             plt.imshow(img, interpolation='nearest')
-    plt.show()
+
+    # plt.show()
+    plt.savefig("figure.png")
 
 
 def save_images(imgs_list, prefix):

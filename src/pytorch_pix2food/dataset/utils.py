@@ -42,8 +42,34 @@ def kmeans(img, bbox):
     #     center = np.array([dark, light])
     # else:
     #     center = np.array([light, dark])
-    print(f"center={center}")
     res = center[label.flatten()].reshape((roi.shape))
     kmPixImg = np.zeros_like(img)
     kmPixImg[ymin:ymax, xmin:xmax] = res
     return res
+
+def generateActionImg(start, end, actImg=None, push_direction="left_push", img_size = (640, 480), forque_width=45):
+    INTENSITY = 255
+    r = forque_width // 2
+
+    if actImg is None:
+        actImg = np.zeros((img_size[1], img_size[0]))
+    
+    if push_direction in ["left_push", "right_push"]:
+        distance_in_pixel = np.abs(end[0] - start[0])
+    else:
+        distance_in_pixel = np.abs(end[1] - start[1])
+
+    x, y = start
+    for i in range(distance_in_pixel):
+        actionValue = INTENSITY * i / distance_in_pixel
+        if push_direction == "left_push":
+            actImg[y - r: y + r, x - i] = actionValue
+        if push_direction == "right_push":
+            actImg[y - r: y + r, x + i] = actionValue
+        if push_direction == "up_push":
+            actImg[y - i, x - r : x + r] = actionValue
+        if push_direction == "down_push":
+            actImg[y + i, x - r : x + r] = actionValue
+    cv2.normalize(actImg, actImg, 0, 255, cv2.NORM_MINMAX)
+
+    return actImg

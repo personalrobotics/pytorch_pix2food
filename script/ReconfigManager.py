@@ -13,6 +13,7 @@ import cv2
 import yaml
 
 from repub_manager import RepubManager
+from viz import Viz
 
 from enum import Enum
 from copy import deepcopy
@@ -29,7 +30,10 @@ from matplotlib import pyplot as plt
 from pytorch_pix2food.options.options import BaseOptions
 from pytorch_pix2food.models.pix2food_model import Pix2FoodModel
 from pytorch_pix2food.dataset.mydataset import OriginDataset, UNetDataset, getTrainAndVal
+from pytorch_pix2food.dataset.utils import generateActionImg
 from pytorch_pix2food.models.utils import show_all_images, show_all_images_rotate, Tensor2Image, save_images, save_images2
+
+br = CvBridge()
 
 class StateMachine(Enum):
     '''
@@ -57,20 +61,24 @@ class my_timer(object):
         self.seq += 1
         print("No.{}, time elapsed = {}".format(str(self.seq), str(elapsed)))
 
-class ReconfigManager(RepubManager):
+class ReconfigManager(Viz, RepubManager):
     def __init__(self, node_name = 'ReconfigManager'):
+        Viz.__init__(self)
         RepubManager.__init__(self, node_name)
-        self.threshold = 0.6
-        self.pushVectors = {'left':[1,0,0], 'up':[0,-1,0], 'right':[-1,0,0], 'down':[0,1,0]}
+        self.threshold = 0.7
         self.reset()
         self.timer = my_timer()
-        self.allow_push_img = None
+        # self.load_pix2food()
 
     def reset(self):
         '''
             reset all variables used in reconfig food item.
         '''
         print("## ----------------------Reset and Start---------------------- ##")
+        # viz 
+        self.viz_reset()
+        
+        # reconfig
         self.state = StateMachine.FREE
         self.lock = True
         ## store 'raw', 'left', 'up', 'right', 'down' image
@@ -80,6 +88,8 @@ class ReconfigManager(RepubManager):
         self.final_marker_array = MarkerArray()
         self.final_score = 0
         self.final_action = None
+        self.allow_push_img = True
+        rospy.set_param('/pushingDemo/allow_push_img',  self.allow_push_img)
 
     def camera_callback(self, img):
         '''
@@ -89,7 +99,8 @@ class ReconfigManager(RepubManager):
             print('0. get img message from camera')
 
             ## add Empty pushing info into info_map stored in CompressedImage.header.frame_id
-            info_map = dict(frame_id=img.header.frame_id, push_direction=None, push_vec=[0,0,0])
+            self.frame_id = img.header.frame_id
+            info_map = dict(frame_id=self.frame_id, push_direction="no_push", push_vec=[0,0,0])
             self.img_buffer['raw'] = deepcopy(img)
             self.img_buffer['raw'].header.frame_id = yaml.dump(info_map)
             # print('out = ' + str(yaml.load(self.img_buffer['raw'].header.frame_id)))
@@ -128,6 +139,13 @@ class ReconfigManager(RepubManager):
 
         self.last_call_from_spanet = time.time()
 
+        # Viz, sleep for making sure to get image we want
+        rospy.sleep(0.2)
+        self.detection_imgs.append(self.detection_img)
+        self.spanet_imgs.append(self.spanet_img)
+        self.viz_callback_reset()
+        rospy.sleep(0.2)
+
         if self.state == StateMachine.ONE:
 
             print('1. StateMachine.ONE: ')
@@ -144,10 +162,9 @@ class ReconfigManager(RepubManager):
                     best_action = yaml_node['action']
             self.final_score = best_score
             self.final_marker_array = deepcopy(marker_array)
-
-            print('receive = ' + str(push_direction))
-
             self.allow_push_img = rospy.get_param('/pushingDemo/allow_push_img')
+            print("allow_push_img = ", self.allow_push_img)
+            
             if best_score > self.threshold or (not self.allow_push_img):
                 print("1. No push, " + "best action is {}, best score is {}".format(best_action, str(best_score)))
 
@@ -157,11 +174,11 @@ class ReconfigManager(RepubManager):
             else:
                 print("1. Need to reconfig the food item via pushing action")
                 self.generatePushedImage(generator='Pix2Food')
-                self.state = StateMachine.PUSHING
-
+                print("finish generating pushing image")
                 self.allow_push_img = False
                 rospy.set_param('/pushingDemo/allow_push_img',  self.allow_push_img)
 
+                self.state = StateMachine.PUSHING
                 self.wait_for_state_change()
 
             # this return is critical for the logistics
@@ -206,16 +223,25 @@ class ReconfigManager(RepubManager):
         '''
         if generator == 'RF':
             for key in self.pushVectors.keys():
-                self.img_buffer[key] = self.generate(key, self.pushVectors[key])
+                self.img_buffer[key] = deepcopy(self.img_buffer['raw'])
                 # print(self.img_buffer[key].header.frame_id)
         if generator == 'Pix2Food':
         # TODO: create a ros callable service, given 1.img + 2.action -> 3.pushed_img
+            # self.pushVectors = {'left_push':[1,0,0], 'up_push':[0,-1,0], 'right_push':[-1,0,0], 'down_push':[0,1,0]}
+            self.pushVectors = {'left_push':[1,0,0]}
             for key in self.pushVectors.keys():
-                self.img_buffer[key] = deepcopy(self.img_buffer['raw'])
+                self.img_buffer[key] = self.push_image(key, self.pushVectors[key])
 
-    def generate(self, push_direction, push_vec):
-        pushed_img = deepcopy(self.img_buffer['raw'])
-        info_map = yaml.load(pushed_img.header.frame_id)
+    def push_image(self, push_direction, push_vec):
+        # img_raw = deepcopy(self.img_buffer['raw'])
+        # startImg = br.compressed_imgmsg_to_cv2(img_raw)
+        # actImg = generateActionImg(start=[300, 150], end=[100, 130], actImg=None, push_direction=push_direction)
+        # self.pix2Food.feedNumpyArrayInput(startImg, actImg)
+        # predImg = self.pix2Food.predict()
+        imgName = "0061_5_finish.png"
+        predImg = cv2.imread(imgName)
+        pushed_img = br.cv2_to_compressed_imgmsg(predImg)
+        info_map = dict(frame_id=self.frame_id, push_direction=None, push_vec=[0,0,0])
         info_map['push_vec'] = push_vec
         info_map['push_direction'] = push_direction
         pushed_img.header.frame_id = yaml.dump(info_map)
@@ -225,10 +251,9 @@ class ReconfigManager(RepubManager):
         opt = BaseOptions().parse()   # get training options
         configPath = "/home/nansong/Dropbox/collaborative_ws/my_ws/src/pytorch_pix2food/script/cGAN_config.yaml"
         with open(configPath, 'rb') as file:
-            trainConfig = yaml.load(file, Loader=yaml.FullLoader)
-        pix2Food = Pix2FoodModel(opt, trainConfig)        
-        pix2Food.netG.load_state_dict(torch.load("../checkpoints/netG-patch512.pkl"))
-        
+            trainConfig = yaml.load(file)
+        self.pix2Food = Pix2FoodModel(opt, trainConfig)        
+        self.pix2Food.netG.load_state_dict(torch.load("../checkpoints/netG-patch512.pkl"))
 
     def wait_for_spanet(self):
         # print('wait_for_spanet processing PushedImage')
@@ -246,16 +271,17 @@ class ReconfigManager(RepubManager):
         while not rospy.is_shutdown():
             if self.state == StateMachine.PUSHING:
                 for key in self.pushVectors.keys():
-                    print('out = ' + yaml.load(self.img_buffer[key].header.frame_id)['push_direction'])
+                    print('publish ' + yaml.load(self.img_buffer[key].header.frame_id)['push_direction'] + " image to SPANet to process")
                     self.lock = True
                     self.spanet_pub.publish(self.img_buffer[key])
                     # rospy.wait_for_message is not suitable here
                     # rospy.wait_for_message(self.spanet_out_topic, MarkerArray)
                     self.wait_for_spanet()
-
+                
                 self.state = StateMachine.READY
 
             if self.state == StateMachine.READY:
+                self.viz_pub()
                 print('5. READY to pub final marker_array with best action')
                 if len(self.final_marker_array.markers) > 0:
                     self.final_marker_array.markers[0].header.seq = self.timer.seq
@@ -265,7 +291,7 @@ class ReconfigManager(RepubManager):
                     self.timer.tic_tok()
                 else:
                     print("5. self.final_marker_array is None, didn't find a good enough potential action")
-                    self.reset()
+                    self.reset()        
 
 if __name__ == "__main__":
     node_name = 'ReconfigManager'

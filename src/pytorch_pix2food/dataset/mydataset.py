@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, random_split
 import torchvision.transforms as T
 from torch.utils.data import DataLoader
 
-from .utils import timeit, kmeans
+from .utils import timeit, kmeans, generateActionImg
 # self.tranform = T.Compose([T.ToTensor(),
 #                            T.Resize(size=self.img_size),
 #                            T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
@@ -192,9 +192,6 @@ class UNetDataset(OriginDataset):
         return bbox
 
     def getActionImgFromXML(self, endName, actImg=None):
-        INTENSITY = 255
-        if actImg is None:
-            actImg = np.zeros((self.origin_size[1], self.origin_size[0]))
         tree = ET.parse(os.path.join(self.annotations_path, endName + ".xml"))
         root = tree.getroot()
         bbox = None
@@ -212,13 +209,6 @@ class UNetDataset(OriginDataset):
         # --- assume it's left  push --- #
         start = [xmax, (ymin + ymax) // 2]
         end = [xmin, (ymin + ymax) // 2]
-        # TODO: cover cases where direction of push action are arbitrary.
-        # Here we only cover `left` direction.
-        distance_in_pixel = start[0] - end[0]
-        x, y = start
-        r = self.forque_width // 2
-        for i in range(distance_in_pixel):
-            actionValue = INTENSITY * i / distance_in_pixel
-            actImg[y - r: y + r, x - i] = actionValue
-        cv2.normalize(actImg, actImg, 0, 255, cv2.NORM_MINMAX)
+        print(start, end)
+        actImg = generateActionImg(start, end, actImg, push_direction=ojbName, img_size = (640, 480), forque_width=45)
         return actImg

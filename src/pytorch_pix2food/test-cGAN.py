@@ -24,7 +24,8 @@ if __name__ == '__main__':
     # --- config --- #
     configPath = "cGAN_config.yaml"
     with open(configPath, 'rb') as file:
-        trainConfig = yaml.load(file, Loader=yaml.FullLoader)
+        trainConfig = yaml.load(file)
+        # trainConfig = yaml.load(file, Loader=yaml.FullLoader)
     # --- networks --- #
     # pix2Food = Pix2FoodModel(opt, trainConfig)
 
@@ -45,7 +46,6 @@ if __name__ == '__main__':
 
     modelName = "pix2food-patch512.pkl"
     modelPath = os.path.join(opt.checkpoints_dir, modelName)
-
     # --- load model --- #
     with open(modelPath, 'rb') as modelFile:
         pix2Food = pickle.load(modelFile)
@@ -57,8 +57,8 @@ if __name__ == '__main__':
         if startImg.shape[0] != bs:
             break
         # --- model update step --- #
-        print(f"plateBBox = {plateBBox[0]}")
-        print(f"imgIDs = {imgIDs}")
+        # print(f"plateBBox = {plateBBox[0]}")
+        # print(f"imgIDs = {imgIDs}")
         pixImg = torch.cat((startImg, actImg), 1)
         pix2Food.feedInput(pixImg, trueImg)
         predImg = pix2Food.predict()
@@ -66,17 +66,17 @@ if __name__ == '__main__':
         show_all_images_rotate([startImg, actImg, trueImg, predImg])
         trueImg, predImg = Tensor2Image(trueImg[0]), Tensor2Image(predImg[0])
         trueImg, predImg = cv2.resize(trueImg, (640, 480)), cv2.resize(predImg, (640, 480))
-        kmTrueImg = kmeans(trueImg, plateBBox[0])
-        kmPredImg = kmeans(predImg, plateBBox[0])
-        plt.imshow(kmTrueImg)
-        plt.show()
-        plt.imshow(kmPredImg)
-        plt.show()
+        # kmTrueImg = kmeans(trueImg, plateBBox[0])
+        # kmPredImg = kmeans(predImg, plateBBox[0])
+        # plt.imshow(kmTrueImg)
+        # plt.show()
+        # plt.imshow(kmPredImg)
+        # plt.show()
         # save_images([predImg], str(iteration))
         # save_images2([predImg], imgIDs)
 
         # Metric:
-        pixAccuracy, meanAccuracy = pixelAccuracy(kmTrueImg, kmPredImg)
-        meanIoU = IoU(kmTrueImg, kmPredImg)
-        print(f"pixAcurracy = {pixAccuracy}, meanAccuracy = {meanAccuracy}, meanIoU = {meanIoU}")
+        # pixAccuracy, meanAccuracy = pixelAccuracy(kmTrueImg, kmPredImg)
+        # meanIoU = IoU(kmTrueImg, kmPredImg)
+        # print(f"pixAcurracy = {pixAccuracy}, meanAccuracy = {meanAccuracy}, meanIoU = {meanIoU}")
         iteration += 1
