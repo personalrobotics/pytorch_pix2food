@@ -95,6 +95,7 @@ class Pix2FoodModel(object):
         self.optimizer_G.step()
 
     def predict(self):
+        # TODO figure out the best API data format. e.g. input image should be uint8? output img should be uint8 or float32
         fakeImg = self.netG(self.pixImg)  # (N, C, H, W)
         fakeImg = deprocess_img(fakeImg)
         fakeImg = fakeImg.data.cpu().numpy()
