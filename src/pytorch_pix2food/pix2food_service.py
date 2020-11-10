@@ -45,24 +45,20 @@ class Generator(object):
         self.tranform = T.Compose([T.Resize(size=(512,512)),
                                    T.ToTensor()])
         rospy.loginfo("finish model init")
-        # new_name = "py2-pix2food-patch512.pkl"
-        # new_path = os.path.join(ckp_dir, new_name)
-        # with open(new_path, 'wb') as f:
-        #     pickle.dump(self.pix2food, f, protocol=2)
 
     def _service_init(self):
         rospy.Service("pix2food", Pix2Food, self._handle)
         rospy.loginfo("finish service init")
 
     def _handle(self, rqt):
-        print("get one rqt")
+        rospy.loginfo("process one request")
         startImg, actImg = br.imgmsg_to_cv2(rqt.startImg), br.imgmsg_to_cv2(rqt.actImg)
         startImg, actImg = Image.fromarray(startImg), Image.fromarray(actImg)
         if self.tranform:
             startImg = torch.unsqueeze(self.tranform(startImg), 0)
             actImg = torch.unsqueeze(self.tranform(actImg), 0)
         pixImg = torch.cat((startImg, actImg), 1)
-        print(pixImg.shape)
+        # print(pixImg.shape)
         self.pix2food.feedInput(pixImg)
         fakeImg = self.pix2food.predict()
         fakeImg = Tensor2Image(fakeImg[0])
